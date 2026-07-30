@@ -1,0 +1,6 @@
+{
+  "name": "GeoEase",
+  "description": "PropTech & GeoTech platform for Certificate of Occupancy land registration, surveyor team dispatch, and GIS weather/GPS analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
