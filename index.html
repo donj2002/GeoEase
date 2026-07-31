@@ -1,13 +1,802 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoEase 🌍 | AI-Powered Geospatial Assistant & Cadastral Platform</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            slate: {
+              850: '#0f172a',
+              950: '#020617'
+            }
+          }
+        }
+      }
+    }
+  </script>
 
+  <!-- Leaflet GIS CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- React 18, React DOM & Babel Standalone for direct browser execution without build step -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    /* Custom Map Marker & Scrollbar styles */
+    .leaflet-container {
+      width: 100%;
+      height: 100%;
+      border-radius: 0.75rem;
+      z-index: 10;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(100, 116, 139, 0.4);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(16, 185, 129, 0.6);
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .map-pulse {
+      animation: pulse-ring 2s infinite;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500 selection:text-slate-950 antialiased min-h-screen">
+
+  <div id="root"></div>
+
+  <!-- Main Single-File Standalone Application Logic -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // --- INITIAL DATA & MODELS ---
+    const INITIAL_LAND_PARCELS = [
+      {
+        id: 'PARCEL-2026-001',
+        title: 'Epe Ocean-View Sector A',
+        alias: 'Epe Coastal Estate Plot 4B',
+        landSizeSqm: 1800,
+        acreage: 0.445,
+        state: 'Lagos State',
+        lga: 'Epe',
+        address: 'Kilometer 14, Lekki-Epe Expressway, Epe, Lagos',
+        zoning: 'Residential',
+        coordinates: { lat: 6.5818, lng: 3.9821 },
+        beacons: ['BC/2026/EP-8801', 'BC/2026/EP-8802', 'BC/2026/EP-8803', 'BC/2026/EP-8804'],
+        status: 'Approved',
+        cOfONumber: 'CofO/2026/LG/994102',
+        registrationDate: '2026-03-15',
+        ownerName: 'Engr. Donald Nwajiaku',
+        applicationProgressPercent: 100,
+        documents: [
+          { id: 'doc-1', name: 'Approved_Perimeter_Survey_Epe.pdf', type: 'Survey Plan', status: 'Verified' },
+          { id: 'doc-2', name: 'Deed_of_Assignment_Stamped.pdf', type: 'Deed of Assignment', status: 'Verified' },
+          { id: 'doc-3', name: 'Certificate_of_Occupancy_Issued.pdf', type: 'Title Deed', status: 'Verified' }
+        ]
+      },
+      {
+        id: 'PARCEL-2026-002',
+        title: 'Maitama Extension Hill Crest',
+        alias: 'Abuja Central Parcel 12',
+        landSizeSqm: 4500,
+        acreage: 1.11,
+        state: 'Federal Capital Territory',
+        lga: 'Abuja Municipal (AMAC)',
+        address: 'Plot 104, Diplomatic Zone Road, Maitama, Abuja',
+        zoning: 'Commercial',
+        coordinates: { lat: 9.0820, lng: 7.4951 },
+        beacons: ['BC/2026/FCT-102', 'BC/2026/FCT-103', 'BC/2026/FCT-104', 'BC/2026/FCT-105'],
+        status: 'Ministry Review',
+        registrationDate: '2026-06-20',
+        ownerName: 'GeoEase Development Corp',
+        applicationProgressPercent: 80,
+        documents: [
+          { id: 'doc-4', name: 'AGIS_Cadastral_Survey_Draft.pdf', type: 'Survey Plan', status: 'Verified' }
+        ]
+      },
+      {
+        id: 'PARCEL-2026-003',
+        title: 'Port Harcourt Trans-Amadi Hub',
+        alias: 'Trans-Amadi Logistics Yard',
+        landSizeSqm: 12000,
+        acreage: 2.96,
+        state: 'Rivers State',
+        lga: 'Port Harcourt City',
+        address: 'Industrial Layout Phase II, Trans-Amadi, Port Harcourt',
+        zoning: 'Industrial',
+        coordinates: { lat: 4.8156, lng: 7.0498 },
+        beacons: ['BC/2026/RV-551', 'BC/2026/RV-552', 'BC/2026/RV-553', 'BC/2026/RV-554'],
+        status: 'Surveyor Assigned',
+        registrationDate: '2026-07-05',
+        ownerName: 'Rivers Logistics Services',
+        applicationProgressPercent: 50,
+        documents: [
+          { id: 'doc-5', name: 'Site_Layout_Draft_Plan.pdf', type: 'Survey Plan', status: 'Pending Review' }
+        ]
+      },
+      {
+        id: 'PARCEL-2026-004',
+        title: 'Ibadan Bodija Agri-Tech Zone',
+        alias: 'Bodija Plot 88',
+        landSizeSqm: 5000,
+        acreage: 1.23,
+        state: 'Oyo State',
+        lga: 'Ibadan North',
+        address: 'Old Bodija Estate Way, Ibadan',
+        zoning: 'Agricultural',
+        coordinates: { lat: 7.4221, lng: 3.9012 },
+        beacons: ['BC/2026/OY-091', 'BC/2026/OY-092'],
+        status: 'Beacon Verification',
+        registrationDate: '2026-07-18',
+        ownerName: 'GreenPastures Farms',
+        applicationProgressPercent: 35,
+        documents: [
+          { id: 'doc-6', name: 'Purchase_Receipt_Oyo.pdf', type: 'Title Deed', status: 'Verified' }
+        ]
+      }
+    ];
+
+    const INITIAL_SURVEYORS = [
+      {
+        id: 'SURV-001',
+        name: 'Surv. Adebayo Ogunlesi',
+        firmName: 'AeroGeo Precision Surveys',
+        rating: 4.9,
+        reviewsCount: 88,
+        phone: '+234 803 456 7890',
+        location: { lat: 6.5244, lng: 3.3792, address: 'Ikeja, Lagos' },
+        proximityKm: 3.2,
+        baseRateUSD: 180,
+        badge: 'Senior Cadastral'
+      },
+      {
+        id: 'SURV-002',
+        name: 'Surv. Chidi Okonkwo',
+        firmName: 'Delta-Geo Integrated Ltd',
+        rating: 4.8,
+        reviewsCount: 64,
+        phone: '+234 802 987 6543',
+        location: { lat: 4.8156, lng: 7.0498, address: 'Port Harcourt' },
+        proximityKm: 1.8,
+        baseRateUSD: 210,
+        badge: 'Certified NIS'
+      },
+      {
+        id: 'SURV-003',
+        name: 'Surv. Folake Adeleke',
+        firmName: 'Apex GIS Solutions',
+        rating: 4.95,
+        reviewsCount: 112,
+        phone: '+234 814 111 2233',
+        location: { lat: 7.3775, lng: 3.9470, address: 'Bodija, Ibadan' },
+        proximityKm: 4.5,
+        baseRateUSD: 160,
+        badge: 'GIS Specialist'
+      }
+    ];
+
+    // --- MAIN APP COMPONENT ---
+    function App() {
+      const [currentTab, setCurrentTab] = useState('dashboard');
+      const [userRole, setUserRole] = useState('landowner');
+      const [searchQuery, setSearchQuery] = useState('');
+      const [landParcels, setLandParcels] = useState(INITIAL_LAND_PARCELS);
+      const [selectedParcelForCert, setSelectedParcelForCert] = useState(null);
+      const [notifications, setNotifications] = useState([
+        { id: 1, title: 'C of O Issued', message: 'Epe Ocean-View Sector A Certificate issued.', time: '10m ago', read: false },
+        { id: 2, title: 'Surveyor Dispatched', message: 'Surv. Adebayo accepted field assignment.', time: '1h ago', read: false }
+      ]);
+      const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+
+      // Render Lucide icons after update
+      useEffect(() => {
+        if (window.lucide) {
+          window.lucide.createIcons();
+        }
+      });
+
+      const unreadNotifCount = notifications.filter(n => !n.read).length;
+
+      return (
+        <div className="flex min-h-screen">
+          {/* SIDEBAR NAVIGATION */}
+          <aside className="w-72 bg-slate-900 border-r border-slate-800 p-5 flex flex-col justify-between hidden lg:flex">
+            <div className="space-y-6">
+              {/* Brand Header */}
+              <div className="flex items-center gap-3 cursor-pointer" onClick={() => setCurrentTab('dashboard')}>
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 via-teal-600 to-sky-700 flex items-center justify-center shadow-lg shadow-emerald-950/50 border border-emerald-400/30">
+                  <i data-lucide="compass" class="w-6 h-6 text-white animate-pulse"></i>
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-xl tracking-tight text-white">GeoEase</span>
+                    <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 rounded border border-emerald-500/30">v2026</span>
+                  </div>
+                  <p className="text-xs text-slate-400">PropTech & Cadastral GIS</p>
+                </div>
+              </div>
+
+              {/* Status Banner */}
+              <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/40 flex items-center gap-3">
+                <i data-lucide="shield-check" class="w-5 h-5 text-emerald-400 shrink-0"></i>
+                <div className="text-xs">
+                  <p className="font-semibold text-emerald-200">Ministry Gateway Live</p>
+                  <p className="text-emerald-400/80">Title Registry Synchronized</p>
+                </div>
+              </div>
+
+              {/* Nav Items */}
+              <nav className="space-y-1.5">
+                {[
+                  { id: 'dashboard', label: 'Dashboard Home', icon: 'layout-dashboard', desc: 'Overview & metrics' },
+                  { id: 'land_portal', label: 'Land Portal (C of O)', icon: 'file-text', desc: 'Multi-step registration' },
+                  { id: 'surveyor_map', label: 'Surveyor Dispatch Map', icon: 'map-pin', desc: 'Interactive Leaflet GIS' },
+                  { id: 'weather_geo', label: 'Weather & Matrix Tools', icon: 'calculator', desc: 'Shoelace area & AI' }
+                ].map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => setCurrentTab(item.id)}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl text-left font-medium transition-all ${
+                      currentTab === item.id 
+                        ? 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow border border-emerald-500/30' 
+                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <i data-lucide={item.icon} class="w-4 h-4"></i>
+                      <div>
+                        <div className="text-xs font-bold leading-none">{item.label}</div>
+                        <div className="text-[10px] text-slate-400 mt-1">{item.desc}</div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            {/* Role Switcher */}
+            <div className="pt-4 border-t border-slate-800 space-y-2">
+              <label className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">View Perspective</label>
+              <select
+                value={userRole}
+                onChange={(e) => setUserRole(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded-xl p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              >
+                <option value="landowner">Landowner / Applicant</option>
+                <option value="surveyor">Licensed Field Surveyor</option>
+                <option value="ministry">Ministry / Lands Admin</option>
+              </select>
+            </div>
+          </aside>
+
+          {/* MAIN CONTENT AREA */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {/* TOP HEADER */}
+            <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-6 py-3 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 text-xs font-medium text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
+                  <i data-lucide="radio" class="w-3.5 h-3.5 text-emerald-400 animate-pulse"></i>
+                  <span>GNSS RTK Fix: <strong className="text-emerald-400">3D Sub-Meter (0.35m)</strong></span>
+                </div>
+              </div>
+
+              {/* Search Bar */}
+              <div className="flex-1 max-w-md relative hidden md:block">
+                <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search land parcel, beacon serial (BC/2026/...), or LGA..."
+                  className="w-full bg-slate-950 border border-slate-700 text-slate-100 text-xs rounded-xl pl-9 pr-4 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Action & Notifications */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentTab('surveyor_map')}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-2 shadow"
+                >
+                  <i data-lucide="compass" class="w-4 h-4"></i>
+                  <span>Request Surveyor</span>
+                </button>
+
+                <div className="relative">
+                  <button
+                    onClick={() => setShowNotifDropdown(!showNotifDropdown)}
+                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 relative border border-slate-700"
+                  >
+                    <i data-lucide="bell" class="w-4 h-4"></i>
+                    {unreadNotifCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-slate-950 text-[10px] font-bold rounded-full flex items-center justify-center">
+                        {unreadNotifCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {showNotifDropdown && (
+                    <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
+                      <div className="text-xs font-bold text-white border-b border-slate-800 pb-2">Notifications</div>
+                      {notifications.map(n => (
+                        <div key={n.id} className="p-2 bg-slate-950 rounded-xl text-xs space-y-1">
+                          <p className="font-semibold text-emerald-400">{n.title}</p>
+                          <p className="text-slate-300 text-[11px]">{n.message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </header>
+
+            {/* TAB VIEWS */}
+            <main className="p-6 max-w-7xl w-full mx-auto space-y-6">
+              {currentTab === 'dashboard' && (
+                <DashboardView 
+                  landParcels={landParcels}
+                  searchQuery={searchQuery}
+                  onNavigate={setCurrentTab}
+                  onSelectCert={setSelectedParcelForCert}
+                />
+              )}
+
+              {currentTab === 'land_portal' && (
+                <LandPortalView 
+                  landParcels={landParcels}
+                  onAddParcel={(p) => setLandParcels([p, ...landParcels])}
+                  onSelectCert={setSelectedParcelForCert}
+                />
+              )}
+
+              {currentTab === 'surveyor_map' && (
+                <SurveyorMapView 
+                  surveyors={INITIAL_SURVEYORS}
+                  landParcels={landParcels}
+                />
+              )}
+
+              {currentTab === 'weather_geo' && (
+                <WeatherGeoView />
+              )}
+            </main>
+
+            {/* FOOTER */}
+            <footer className="border-t border-slate-900 bg-slate-950 px-6 py-4 text-center text-xs text-slate-400">
+              © 2026 GeoEase PropTech & GeoTech Cadastral Engine. Standalone HTML Edition. All rights reserved.
+            </footer>
+          </div>
+
+          {/* CERTIFICATE MODAL */}
+          {selectedParcelForCert && (
+            <CertificateModal 
+              parcel={selectedParcelForCert} 
+              onClose={() => setSelectedParcelForCert(null)} 
+            />
+          )}
+        </div>
+      );
+    }
+
+    // --- DASHBOARD VIEW ---
+    function DashboardView({ landParcels, searchQuery, onNavigate, onSelectCert }) {
+      const filtered = landParcels.filter(p => {
+        if (!searchQuery) return true;
+        const q = searchQuery.toLowerCase();
+        return p.title.toLowerCase().includes(q) || p.lga.toLowerCase().includes(q) || p.beacons.some(b => b.toLowerCase().includes(q));
+      });
+
+      const approvedCount = landParcels.filter(p => p.status === 'Approved').length;
+      const pendingCount = landParcels.filter(p => p.status !== 'Approved').length;
+      const totalSqm = landParcels.reduce((acc, p) => acc + p.landSizeSqm, 0);
+
+      return (
+        <div className="space-y-6">
+          {/* Welcome Card */}
+          <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950 border border-slate-800 p-6 rounded-2xl shadow-xl space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+              <span>Official Cadastral Gateway</span>
+            </div>
+            <h1 className="text-2xl font-bold text-white">GeoEase Cadastral Dashboard</h1>
+            <p className="text-xs text-slate-300 max-w-2xl">
+              Bypass bureaucratic bottlenecks. Manage C of O land titles, dispatch licensed survey teams, and run Shoelace area matrix calculations natively.
+            </p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-slate-800">
+              <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-400 text-[10px]">TOTAL PLOTS</span>
+                <p className="text-lg font-bold text-white">{landParcels.length}</p>
+              </div>
+              <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-400 text-[10px]">APPROVED C OF O</span>
+                <p className="text-lg font-bold text-emerald-400">{approvedCount}</p>
+              </div>
+              <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-400 text-[10px]">PENDING PIPELINE</span>
+                <p className="text-lg font-bold text-amber-400">{pendingCount}</p>
+              </div>
+              <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-400 text-[10px]">SURVEYED AREA</span>
+                <p className="text-lg font-bold text-sky-400">{(totalSqm/10000).toFixed(2)} ha</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Land Cards Grid */}
+          <div className="space-y-4">
+            <h2 className="text-base font-bold text-white">Active Land Registrations ({filtered.length})</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filtered.map(parcel => (
+                <div key={parcel.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3 hover:border-slate-700 transition-all">
+                  <div className="flex justify-between items-start border-b border-slate-800 pb-3">
+                    <div>
+                      <span className="text-xs font-mono text-emerald-400 font-bold">{parcel.id}</span>
+                      <h3 className="text-sm font-bold text-white mt-0.5">{parcel.title}</h3>
+                      <p className="text-xs text-slate-400">{parcel.lga}, {parcel.state}</p>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${
+                      parcel.status === 'Approved' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    }`}>
+                      {parcel.status}
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-slate-300 space-y-1">
+                    <p>Area: <strong>{parcel.landSizeSqm.toLocaleString()} SQM</strong> ({parcel.acreage} Acres)</p>
+                    <p className="font-mono text-[11px]">Beacons: {parcel.beacons.join(', ')}</p>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-xs text-slate-400">Owner: {parcel.ownerName}</span>
+                    {parcel.status === 'Approved' && (
+                      <button 
+                        onClick={() => onSelectCert(parcel)}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg"
+                      >
+                        View C of O Certificate
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- LAND PORTAL VIEW ---
+    function LandPortalView({ landParcels, onAddParcel, onSelectCert }) {
+      const [viewMode, setViewMode] = useState('list');
+      const [formData, setFormData] = useState({
+        title: '', landSizeSqm: 1200, state: 'Lagos State', lga: 'Epe', ownerName: 'Engr. Donald Nwajiaku', beaconsText: 'BC/2026/LA-101, BC/2026/LA-102'
+      });
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        const newP = {
+          id: `PARCEL-2026-${Math.floor(100 + Math.random() * 900)}`,
+          title: formData.title || 'Custom Land Plot',
+          landSizeSqm: Number(formData.landSizeSqm),
+          acreage: Number((formData.landSizeSqm / 4046.86).toFixed(3)),
+          state: formData.state,
+          lga: formData.lga,
+          address: `${formData.lga}, ${formData.state}`,
+          zoning: 'Residential',
+          coordinates: { lat: 6.5818, lng: 3.9821 },
+          beacons: formData.beaconsText.split(',').map(b => b.trim()),
+          status: 'Pending Review',
+          registrationDate: new Date().toISOString().split('T')[0],
+          ownerName: formData.ownerName,
+          applicationProgressPercent: 25,
+          documents: [{ id: 'd-new', name: 'Perimeter_Survey_Plan.pdf', type: 'Survey Plan', status: 'Uploaded' }]
+        };
+        onAddParcel(newP);
+        setViewMode('list');
+      };
+
+      return (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center bg-slate-900 p-6 rounded-2xl border border-slate-800">
+            <div>
+              <h1 className="text-xl font-bold text-white">Certificate of Occupancy (C of O) Portal</h1>
+              <p className="text-xs text-slate-400">Manage title registrations and upload cadastral deeds</p>
+            </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setViewMode('list')} 
+                className={`px-4 py-2 rounded-xl text-xs font-semibold ${viewMode === 'list' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300'}`}
+              >
+                Applications ({landParcels.length})
+              </button>
+              <button 
+                onClick={() => setViewMode('new')} 
+                className={`px-4 py-2 rounded-xl text-xs font-semibold ${viewMode === 'new' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300'}`}
+              >
+                + New Registration
+              </button>
+            </div>
+          </div>
+
+          {viewMode === 'list' ? (
+            <div className="space-y-4">
+              {landParcels.map(p => (
+                <div key={p.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div className="space-y-1">
+                    <span className="text-xs font-mono text-emerald-400 font-bold">{p.id}</span>
+                    <h3 className="text-base font-bold text-white">{p.title}</h3>
+                    <p className="text-xs text-slate-400">{p.lga}, {p.state} • {p.landSizeSqm.toLocaleString()} SQM</p>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-slate-950 border border-slate-800 text-emerald-400">
+                      {p.status}
+                    </span>
+                    {p.status === 'Approved' && (
+                      <button 
+                        onClick={() => onSelectCert(p)}
+                        className="px-3.5 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl"
+                      >
+                        View Title
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 max-w-2xl mx-auto">
+              <h2 className="text-base font-bold text-white">Register New Land Plot</h2>
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Land Title / Estate Name</label>
+                <input 
+                  type="text" required value={formData.title} 
+                  onChange={e => setFormData({...formData, title: e.target.value})}
+                  className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-2.5 text-xs"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Size in SQM</label>
+                  <input 
+                    type="number" required value={formData.landSizeSqm} 
+                    onChange={e => setFormData({...formData, landSizeSqm: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-2.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">State</label>
+                  <input 
+                    type="text" required value={formData.state} 
+                    onChange={e => setFormData({...formData, state: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-2.5 text-xs"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Beacon Serials (Comma separated)</label>
+                <input 
+                  type="text" value={formData.beaconsText} 
+                  onChange={e => setFormData({...formData, beaconsText: e.target.value})}
+                  className="w-full bg-slate-950 border border-slate-700 text-emerald-300 font-mono rounded-xl p-2.5 text-xs"
+                />
+              </div>
+              <button type="submit" className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl text-xs">
+                Submit C of O Application
+              </button>
+            </form>
+          )}
+        </div>
+      );
+    }
+
+    // --- SURVEYOR MAP VIEW ---
+    function SurveyorMapView({ surveyors, landParcels }) {
+      const mapContainerRef = useRef(null);
+      const mapInstanceRef = useRef(null);
+      const [surveyType, setSurveyType] = useState('Boundary Survey');
+      const [landSize, setLandSize] = useState(1800);
+
+      useEffect(() => {
+        if (!mapInstanceRef.current && mapContainerRef.current) {
+          const map = L.map(mapContainerRef.current).setView([6.5818, 3.9821], 12);
+          
+          L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '&copy; Esri World Imagery'
+          }).addTo(map);
+
+          // Add Markers
+          landParcels.forEach(p => {
+            L.marker([p.coordinates.lat, p.coordinates.lng])
+              .addTo(map)
+              .bindPopup(`<b>${p.title}</b><br/>Area: ${p.landSizeSqm} SQM`);
+          });
+
+          mapInstanceRef.current = map;
+        }
+      }, []);
+
+      const estimatedTotal = Math.round(150 + (landSize / 5000) * 80 + 45 + Math.ceil(landSize/500)*15);
+
+      return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+            <h2 className="text-base font-bold text-white">Interactive GIS Field Dispatch Map</h2>
+            <div ref={mapContainerRef} className="w-full h-[450px] rounded-xl overflow-hidden border border-slate-800"></div>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+            <h3 className="text-base font-bold text-white border-b border-slate-800 pb-2">Survey Cost Estimator</h3>
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-300 mb-1">Land Size SQM</label>
+                <input 
+                  type="number" value={landSize} onChange={e => setLandSize(Number(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-2.5"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-300 mb-1">Survey Type</label>
+                <select 
+                  value={surveyType} onChange={e => setSurveyType(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-2.5"
+                >
+                  <option value="Boundary Survey">Boundary Survey</option>
+                  <option value="Topographic Survey">Topographic Contour Survey</option>
+                  <option value="Cadastral Survey">Cadastral State C of O</option>
+                </select>
+              </div>
+
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1 text-slate-300">
+                <div className="flex justify-between"><span>Base Fieldwork:</span><span>${Math.round(150 + (landSize/5000)*80)}</span></div>
+                <div className="flex justify-between"><span>RTK GNSS Setup:</span><span>$45</span></div>
+                <div className="flex justify-between font-bold text-emerald-400 text-sm pt-2 border-t border-slate-800">
+                  <span>Estimated Total:</span><span>${estimatedTotal}.00</span>
+                </div>
+              </div>
+
+              <button className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl">
+                Confirm & Dispatch Survey Team (${estimatedTotal})
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- WEATHER & SHOELACE MATRIX VIEW ---
+    function WeatherGeoView() {
+      const [matrixInput, setMatrixInput] = useState("6.5818, 3.9821\n6.5828, 3.9821\n6.5828, 3.9831\n6.5818, 3.9831");
+      const [matrixResult, setMatrixResult] = useState(null);
+
+      const handleCalculateMatrix = () => {
+        const lines = matrixInput.trim().split('\n');
+        const points = [];
+        lines.forEach(l => {
+          const parts = l.split(/[\s,]+/).map(n => parseFloat(n)).filter(n => !isNaN(n));
+          if (parts.length >= 2) points.push(parts);
+        });
+
+        if (points.length < 3) {
+          alert('Input at least 3 points.'); return;
+        }
+
+        const refLat = points[0][0];
+        const latM = 111000;
+        const lngM = 111000 * Math.cos((refLat * Math.PI) / 180);
+        const proj = points.map(([lat, lng]) => [lng * lngM, lat * latM]);
+
+        let pos = 0, neg = 0, n = proj.length;
+        for (let i = 0; i < n; i++) {
+          const j = (i + 1) % n;
+          pos += proj[i][0] * proj[j][1];
+          neg += proj[j][0] * proj[i][1];
+        }
+        const areaSqm = Math.abs(pos - neg) / 2;
+
+        setMatrixResult({ areaSqm: Math.round(areaSqm), acres: Number((areaSqm/4046.86).toFixed(3)), pointsCount: n });
+      };
+
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+            <h2 className="text-base font-bold text-white">Shoelace Coordinate Matrix Calculator</h2>
+            <p className="text-xs text-slate-400">Paste polygon vertices to compute exact enclosed boundary area using Gauss's Shoelace algorithm.</p>
+            <textarea 
+              rows={5} value={matrixInput} onChange={e => setMatrixInput(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-700 text-emerald-300 font-mono text-xs rounded-xl p-3"
+            />
+            <button onClick={handleCalculateMatrix} className="w-full py-2.5 bg-emerald-600 text-white font-bold rounded-xl text-xs">
+              Compute Matrix Area
+            </button>
+
+            {matrixResult && (
+              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-2">
+                <p className="font-bold text-emerald-400">Area: {matrixResult.areaSqm.toLocaleString()} SQM</p>
+                <p className="text-white">Acreage: {matrixResult.acres} Acres</p>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+            <h2 className="text-base font-bold text-white">Atmospheric Telemetry & Drone Flight Safety</h2>
+            <div className="p-4 bg-emerald-950/40 rounded-xl border border-emerald-800 text-xs text-emerald-200">
+              ✔ LiDAR Drone Survey Flight Authorized • Wind Gusts: 11.2 km/h • Temp: 28.5°C
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- CERTIFICATE MODAL ---
+    function CertificateModal({ parcel, onClose }) {
+      return (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full p-6 space-y-6">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-white">Certificate of Occupancy Title Document</h3>
+              <button onClick={onClose} className="px-3 py-1 bg-slate-800 text-xs rounded-lg">Close</button>
+            </div>
+
+            <div className="bg-amber-50 text-amber-950 p-8 rounded-2xl border-4 border-amber-900/40 space-y-6 font-serif">
+              <div className="text-center space-y-1">
+                <p className="text-[10px] font-sans font-bold tracking-widest uppercase">Federal Republic Land Registry</p>
+                <h1 className="text-2xl font-bold uppercase">Certificate of Occupancy</h1>
+                <p className="text-xs font-mono font-bold text-amber-800">{parcel.cOfONumber || 'CofO/2026/LG/994102'}</p>
+              </div>
+
+              <p className="text-xs leading-relaxed">
+                THIS IS TO CERTIFY that <strong className="uppercase">{parcel.ownerName}</strong> is granted statutory Right of Occupancy over land situate in <strong>{parcel.lga}, {parcel.state}</strong> measuring <strong>{parcel.landSizeSqm.toLocaleString()} SQM</strong>.
+              </p>
+
+              <div className="flex justify-between items-center pt-6 border-t border-amber-900/30 text-[10px] font-sans">
+                <div>
+                  <p className="font-bold">Surv. Adebayo O.</p>
+                  <p>Surveyor General</p>
+                </div>
+                <div className="px-3 py-1 border-2 border-emerald-800 text-emerald-900 font-bold rotate-6 rounded">
+                  VERIFIED 2026
+                </div>
+                <div>
+                  <p className="font-bold">Hon. Director of Lands</p>
+                  <p>Ministry Secretary</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Render App
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
